@@ -101,12 +101,16 @@ public class ToParentBlockJoinQuery extends Query {
               .rewrite(new ConstantScoreQuery(childQuery))
               .createWeight(searcher, weightScoreMode, 0f);
     } else {
-      // if the score is needed we force the collection mode to COMPLETE because the child query
-      // cannot skip
-      // non-competitive documents.
+      // if the score is needed and the score mode is not max, we force the collection mode to
+      // COMPLETE because the
+      // child query cannot skip non-competitive documents.
       childWeight =
           childQuery.createWeight(
-              searcher, weightScoreMode.needsScores() ? COMPLETE : weightScoreMode, boost);
+              searcher,
+              weightScoreMode.needsScores() && childScoreMode != ScoreMode.Max
+                  ? COMPLETE
+                  : weightScoreMode,
+              boost);
     }
     return new BlockJoinWeight(this, childWeight, parentsFilter, childScoreMode);
   }
@@ -164,6 +168,11 @@ public class ToParentBlockJoinQuery extends Query {
         @Override
         public long cost() {
           return childScorerSupplier.cost();
+        }
+
+        @Override
+        public void setTopLevelScoringClause() throws IOException {
+          childScorerSupplier.setTopLevelScoringClause();
         }
       };
     }
@@ -343,7 +352,7 @@ public class ToParentBlockJoinQuery extends Query {
 
     @Override
     public void setMinCompetitiveScore(float minScore) throws IOException {
-      if (scoreMode == ScoreMode.None) {
+      if (scoreMode == ScoreMode.None || scoreMode == ScoreMode.Max) {
         childScorer.setMinCompetitiveScore(minScore);
       }
     }
